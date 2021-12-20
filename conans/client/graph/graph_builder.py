@@ -269,6 +269,10 @@ class DepsGraphBuilder(object):
 
         self._prepare_node(new_node, profile_host, profile_build, down_options)
         require.process_package_type(new_node)
+        
+        if node.dependants and str(node.dependants[0].src) == str(new_node):
+            raise GraphError.loop(node, require, new_node)
+        
         graph.add_node(new_node)
         graph.add_edge(node, new_node, require)
         if node.propagate_downstream(require, new_node):

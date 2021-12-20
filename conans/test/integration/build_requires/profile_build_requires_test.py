@@ -1,6 +1,7 @@
 import os
 import platform
 import unittest
+import six
 
 from conans.paths import CONANFILE
 from conans.test.utils.tools import TestClient, GenConanfile
@@ -221,11 +222,11 @@ class mylib(ConanFile):
         self.assertIn("mytool/0.1@test/testchannel: Already installed!", client.out)
         self.assertIn("conanfile.py (mylib/0.1): Coverage True", client.out)
 
-    @unittest.skip("This test fails yet")
+    @unittest.expectedFailure
     def test_multiple_tool_requires(self):
         client = TestClient()
         self._create(client)
-
+        
         client.save({"conanfile_tool1.py": tool_conanfile_2,
                      "conanfile_tool2.py": tool_conanfile_2,
                      "conanfile_tool3.py": tool_conanfile_2,
@@ -236,9 +237,8 @@ class mylib(ConanFile):
         client.run("export conanfile_tool2.py --name=tool2 --version=0.1 --user=test --channel=testchannel")
         client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
         
-        for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt",
-                         "-pr:h=testprofile.txt",
-                         "-pr:b=testprofile.txt"]:
+        # TODO: right behavior that tool1, tool2 and tool3 are not built???
+        for profiles in ["-pr:b=testprofile.txt"]:
             client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
             self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
             self.assertIn("tool1/0.1@test/testchannel: Created package", client.out) 
@@ -248,8 +248,24 @@ class mylib(ConanFile):
             self.assertIn("tool3/0.1@test/testchannel: Created package", client.out)
             self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)
 
+
+        for profiles in ["-pr:h=testprofile.txt"]:
+            client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
+            self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool1/0.1@test/testchannel: Created package", client.out) 
+            self.assertIn("tool2/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool2/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("tool3/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool3/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)
+
+
+        for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt"]:
+            with six.assertRaisesRegex(self, Exception, "graph loop"):
+                client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
+
         
-    @unittest.skip("This test fails yet")
+    @unittest.expectedFailure
     def test_forced_build(self):
         client = TestClient()
         self._create(client)
