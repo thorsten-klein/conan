@@ -2,17 +2,16 @@ import os
 import platform
 import unittest
 
-
 from conans.paths import CONANFILE
 from conans.test.utils.tools import TestClient, GenConanfile
 
 
-tool_conanfile = """
+tool_conanfile_1 = """
 import os
 from conans import ConanFile
 
-class tool(ConanFile):
-    name = "tool"
+class mytool(ConanFile):
+    name = "tool1"
     version = "0.1"
     exports_sources = "mytool*"
 
@@ -23,7 +22,24 @@ class tool(ConanFile):
         self.buildenv_info.append_path("PATH", self.package_folder)
 """
 
-lib_conanfile = """
+tool_conanfile_2 = """
+import os
+from conans import ConanFile
+
+class mytool(ConanFile):
+    pass
+"""
+
+tool_conanfile_3 = """
+import os
+from conans import ConanFile
+
+class mytool(ConanFile):
+    build_requires = "tool1/0.1@test/testchannel"
+"""
+
+
+consumer_conanfile_1 = """
 from conans import ConanFile
 
 class mylib(ConanFile):
@@ -34,15 +50,31 @@ class mylib(ConanFile):
         self.run("mytool")
 """
 
-profile = """
+consumer_conanfile_2 = """
+from conans import ConanFile
+
+class mylib(ConanFile):
+    pass
+"""
+
+profile1 = """
 [tool_requires]
-tool/0.1@lasote/stable
+tool1/0.1@test/testchannel
 nonexistingpattern*: sometool/1.2@user/channel
 """
 
 profile2 = """
 [tool_requires]
-tool/0.1@lasote/stable
+tool1/0.1@test/testchannel
+tool2/0.1@test/testchannel
+nonexistingpattern*: sometool/1.2@user/channel
+"""
+
+profile3 = """
+[tool_requires]
+tool1/0.1@test/testchannel
+tool2/0.1@test/testchannel
+tool3/0.1@test/testchannel
 nonexistingpattern*: sometool/1.2@user/channel
 """
 
@@ -51,32 +83,32 @@ class BuildRequiresTest(unittest.TestCase):
 
     def _create(self, client):
         name = "mytool.bat" if platform.system() == "Windows" else "mytool"
-        client.save({CONANFILE: tool_conanfile,
+        client.save({CONANFILE: tool_conanfile_1,
                      name: "echo Hello World!"}, clean_first=True)
         os.chmod(os.path.join(client.current_folder, name), 0o777)
-        client.run("export . --user=lasote --channel=stable")
+        client.run("export . --user=test --channel=testchannel")
 
     def test_profile_requires(self):
         client = TestClient()
         self._create(client)
 
-        client.save({CONANFILE: lib_conanfile,
-                     "profile.txt": profile,
-                     "profile2.txt": profile2}, clean_first=True)
-        client.run("export . --user=lasote --channel=stable")
+        client.save({CONANFILE: consumer_conanfile_1,
+                     "profile1.txt": profile1,
+                     "profile2.txt": profile1}, clean_first=True)
+        client.run("export . --user=test --channel=testchannel")
 
-        client.run("install --reference=mylib/0.1@lasote/stable --profile ./profile.txt --build missing")
+        client.run("install --reference=mylib/0.1@test/testchannel --profile ./profile1.txt --build missing")
         self.assertIn("Hello World!", client.out)
 
-        client.run("install --reference=mylib/0.1@lasote/stable --profile ./profile2.txt --build")
+        client.run("install --reference=mylib/0.1@test/testchannel --profile ./profile2.txt --build")
         self.assertIn("Hello World!", client.out)
 
     def test_profile_open_requires(self):
         client = TestClient()
         self._create(client)
 
-        client.save({CONANFILE: lib_conanfile,
-                     "profile.txt": profile}, clean_first=True)
+        client.save({CONANFILE: consumer_conanfile_1,
+                     "profile.txt": profile1}, clean_first=True)
 
         client.run("build . --profile ./profile.txt --build missing")
         self.assertIn("Hello World!", client.out)
@@ -85,20 +117,20 @@ class BuildRequiresTest(unittest.TestCase):
         client = TestClient()
         self._create(client)
 
-        client.save({CONANFILE: lib_conanfile,
-                     "profile.txt": profile}, clean_first=True)
+        client.save({CONANFILE: consumer_conanfile_1,
+                     "profile.txt": profile1}, clean_first=True)
 
         client.run("install . --profile ./profile.txt", assert_error=True)
-        self.assertIn("ERROR: Missing prebuilt package for 'tool/0.1@lasote/stable'", client.out)
+        self.assertIn("ERROR: Missing prebuilt package for 'tool1/0.1@test/testchannel'", client.out)
         client.run("install . --profile ./profile.txt --build=Pythontool", assert_error=True)
-        self.assertIn("ERROR: Missing prebuilt package for 'tool/0.1@lasote/stable'", client.out)
-        client.run("install . --profile ./profile.txt --build=*tool")
-        self.assertIn("tool/0.1@lasote/stable: Generated conaninfo.txt", client.out)
+        self.assertIn("ERROR: Missing prebuilt package for 'tool1/0.1@test/testchannel'", client.out)
+        client.run("install . --profile ./profile.txt --build=*tool1")
+        self.assertIn("tool1/0.1@test/testchannel: Generated conaninfo.txt", client.out)
 
         # now remove packages, ensure --build=missing also creates them
         client.run('remove "*" -p -f')
         client.run("install . --profile ./profile.txt --build=missing")
-        self.assertIn("tool/0.1@lasote/stable: Generated conaninfo.txt", client.out)
+        self.assertIn("tool1/0.1@test/testchannel: Generated conaninfo.txt", client.out)
 
     def test_profile_test_requires(self):
         client = TestClient()
@@ -116,12 +148,12 @@ class Testmylib(ConanFile):
     def test(self):
         pass
         """
-        client.save({CONANFILE: lib_conanfile,
+        client.save({CONANFILE: consumer_conanfile_1,
                      "test_package/conanfile.py": test_conanfile,
-                     "profile.txt": profile,
+                     "profile1.txt": profile1,
                      "profile2.txt": profile2}, clean_first=True)
 
-        client.run("create . lasote/stable --profile ./profile.txt --build missing")
+        client.run("create . test/testchannel --profile ./profile1.txt --build missing")
         self.assertEqual(2, str(client.out).splitlines().count("Hello World!"))
 
     def test_consumer_patterns(self):
@@ -139,7 +171,7 @@ class Testmylib(ConanFile):
     def test(self):
         pass
         """
-        lib_conanfile = """
+        consumer_conanfile_1 = """
 import os
 from conans import ConanFile, tools
 
@@ -149,22 +181,22 @@ class mylib(ConanFile):
 
 
 """
-        profile_patterns = """
+        test_profile = """
 [tool_requires]
-&: tool/0.1@lasote/stable
+&: tool1/0.1@test/testchannel
 nonexistingpattern*: sometool/1.2@user/channel
 """
-        client.save({CONANFILE: lib_conanfile,
+        client.save({CONANFILE: consumer_conanfile_1,
                      "test_package/conanfile.py": test_conanfile,
-                     "profile.txt": profile_patterns}, clean_first=True)
+                     "profile.txt": test_profile}, clean_first=True)
 
-        client.run("create . lasote/stable --profile=./profile.txt --build=missing")
+        client.run("create . test/testchannel --profile=./profile.txt --build=missing")
         self.assertEqual(1, str(client.out).splitlines().count("Hello World!"))
 
     def test_build_requires_options(self):
         client = TestClient()
         client.save({CONANFILE: GenConanfile("mytool", "0.1")})
-        client.run("export . --user=lasote --channel=stable")
+        client.run("export . --user=test --channel=testchannel")
 
         conanfile = """
 from conans import ConanFile, tools
@@ -172,19 +204,112 @@ from conans import ConanFile, tools
 class mylib(ConanFile):
     name = "mylib"
     version = "0.1"
-    build_requires = "mytool/0.1@lasote/stable"
+    build_requires = "mytool/0.1@test/testchannel"
     options = {"coverage": [True, False]}
     def build(self):
         self.output.info("Coverage %s" % self.options.coverage)
 """
         client.save({CONANFILE: conanfile}, clean_first=True)
         client.run("build . -o mylib:coverage=True --build missing")
-        self.assertIn("mytool/0.1@lasote/stable from local cache", client.out)
-        self.assertIn("mytool/0.1@lasote/stable: Calling build()", client.out)
+        self.assertIn("mytool/0.1@test/testchannel from local cache", client.out)
+        self.assertIn("mytool/0.1@test/testchannel: Calling build()", client.out)
         self.assertIn("conanfile.py (mylib/0.1): Coverage True", client.out)
 
         client.save({CONANFILE: conanfile}, clean_first=True)
         client.run("build . -o coverage=True")
-        self.assertIn("mytool/0.1@lasote/stable from local cache", client.out)
-        self.assertIn("mytool/0.1@lasote/stable: Already installed!", client.out)
+        self.assertIn("mytool/0.1@test/testchannel from local cache", client.out)
+        self.assertIn("mytool/0.1@test/testchannel: Already installed!", client.out)
         self.assertIn("conanfile.py (mylib/0.1): Coverage True", client.out)
+
+    @unittest.skip("This test fails yet")
+    def test_multiple_tool_requires(self):
+        client = TestClient()
+        self._create(client)
+
+        client.save({"conanfile_tool1.py": tool_conanfile_2,
+                     "conanfile_tool2.py": tool_conanfile_2,
+                     "conanfile_tool3.py": tool_conanfile_2,
+                     "conanfile_consumer.py": consumer_conanfile_2,
+                     "testprofile.txt": profile3}, clean_first=True)
+
+        client.run("export conanfile_tool1.py --name=tool1 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool2.py --name=tool2 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
+        
+        for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt",
+                         "-pr:h=testprofile.txt",
+                         "-pr:b=testprofile.txt"]:
+            client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
+            self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool1/0.1@test/testchannel: Created package", client.out) 
+            self.assertIn("tool2/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool2/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("tool3/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertIn("tool3/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)
+
+        
+    @unittest.skip("This test fails yet")
+    def test_forced_build(self):
+        client = TestClient()
+        self._create(client)
+
+        test_profile = """
+[tool_requires]
+tool1/0.1@test/testchannel
+"""
+        client.save({"conanfile_tool1.py": tool_conanfile_2,
+                     "conanfile_consumer.py": consumer_conanfile_2,
+                     "testprofile.txt": test_profile}, clean_first=True)
+
+        client.run("export conanfile_tool1.py --name=tool1 --version=0.1 --user=test --channel=testchannel")
+        
+        
+        for build in ["--build=consumer --build=tool1",
+                      "--build=all",
+                      "--build='*'"
+                     ]:
+            for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt",
+                             "-pr:h=testprofile.txt",
+                             "-pr:b=testprofile.txt"
+                            ]:
+                client.run("create conanfile_consumer.py consumer/0.1@test/testchannel -pr:b=default -pr:h=default {profiles} {build}".format(profiles=profiles, build=build))
+                self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+                self.assertIn("tool1/0.1@test/testchannel: Created package", client.out) 
+                self.assertIn("consumer/0.1@test/testchannel: Forced build from source", client.out)
+                self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)
+            
+            
+    def test_consumer_patterns_negotiated(self):
+        client = TestClient()
+        self._create(client)
+
+        test_profile = """
+[tool_requires]
+tool1/0.1@test/testchannel
+!tool1/*: tool2/0.1@test/testchannel
+!*: tool3/0.1@test/testchannel
+"""
+        client.save({"conanfile_tool1.py": tool_conanfile_2,
+                     "conanfile_tool2.py": tool_conanfile_3,
+                     "conanfile_tool3.py": tool_conanfile_3,
+                     "conanfile_consumer.py": consumer_conanfile_2,
+                     "testprofile.txt": test_profile}, clean_first=True)
+
+        client.run("export conanfile_tool1.py --name=tool1 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool2.py --name=tool2 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
+        
+        for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt",
+                         "-pr:h=testprofile.txt",
+                         "-pr:b=testprofile.txt"
+                        ]:
+            client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build=consumer --build=tool1 --build=tool2 --build=tool3 -pr:b=testprofile.txt -pr:h=testprofile.txt -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
+            self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out)
+            self.assertIn("tool1/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("tool2/0.1@test/testchannel: Forced build from source", client.out)
+            self.assertIn("tool2/0.1@test/testchannel: Created package", client.out)
+            self.assertNotIn("tool3/0.1@test/testchannel: Forced build from source", client.out)
+            self.assertNotIn("tool3/0.1@test/testchannel: Created package", client.out)
+            self.assertIn("consumer/0.1@test/testchannel: Forced build from source", client.out)
+            self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)

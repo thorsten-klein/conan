@@ -160,6 +160,7 @@ class DepsGraphBuilder(object):
         for pattern, tool_requires in tool_requires.items():
             if ((node.recipe == RECIPE_CONSUMER and pattern == "&") or
                 (node.recipe != RECIPE_CONSUMER and pattern == "&!") or
+                (pattern.startswith("!") and not fnmatch.fnmatch(str_ref, pattern[1:])) or
                     fnmatch.fnmatch(str_ref, pattern)):
                 for tool_require in tool_requires:  # Do the override
                     if str(tool_require) == str(node.ref):  # FIXME: Ugly str comparison
