@@ -48,8 +48,11 @@ class DepsGraphBuilder(object):
                                                 profile_build, graph_lock)
                 if new_node:
                     self._initialize_requires(new_node, dep_graph, graph_lock)
-                    open_requires.extendleft((r, new_node)
-                                             for r in reversed(new_node.conanfile.requires.values()))
+                    new_requires = [(r, new_node) for r in reversed(new_node.conanfile.requires.values())]
+                    #for r in new_requires:
+                    #    if r[0] in [ x[0] for x in open_requires if str(x[1])==str(r[1])]:
+                    #        raise GraphError.loop(node, require, new_node)
+                    open_requires.extendleft(new_requires)
             self._remove_overrides(dep_graph)
             check_graph_provides(dep_graph)
         except GraphError as e:
@@ -178,6 +181,10 @@ class DepsGraphBuilder(object):
 
         for require in node.conanfile.requires.values():
             self._resolve_alias(node, require, graph)
+            
+            if node.dependants and str(node.dependants[0].src) == str(require.ref):
+                raise GraphError.loop(node, require, node.dependants[0].src)
+            
             node.transitive_deps[require] = TransitiveRequirement(require, node=None)
 
     def _resolve_alias(self, node, require, graph):
@@ -270,8 +277,8 @@ class DepsGraphBuilder(object):
         self._prepare_node(new_node, profile_host, profile_build, down_options)
         require.process_package_type(new_node)
         
-        if node.dependants and str(node.dependants[0].src) == str(new_node):
-            raise GraphError.loop(node, require, new_node)
+        #if node.dependants and str(node.dependants[0].src) == str(new_node):
+        #    raise GraphError.loop(node, require, new_node)
         
         graph.add_node(new_node)
         graph.add_edge(node, new_node, require)
