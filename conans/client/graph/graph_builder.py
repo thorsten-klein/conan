@@ -158,13 +158,15 @@ class DepsGraphBuilder(object):
 
         # Apply build_tools_requires from profile, overriding the declared ones
         profile = profile_host if node.context == CONTEXT_HOST else profile_build
-        tool_requires = profile.tool_requires
+        tool_requires_dict = profile.tool_requires
         str_ref = str(node.ref)
-        for pattern, tool_requires in tool_requires.items():
-            if ((node.recipe == RECIPE_CONSUMER and pattern == "&") or
+        for pattern, tool_requires in tool_requires_dict.items():
+            if ((node.recipe == RECIPE_CONSUMER and pattern in ["&", "&+"]) or
                 (node.recipe != RECIPE_CONSUMER and pattern == "&!") or
                 (pattern.startswith("!") and not fnmatch.fnmatch(str_ref, pattern[1:])) or
                     fnmatch.fnmatch(str_ref, pattern)):
+                if (str(node) in [str(x) for x in tool_requires] and pattern == "&+"):
+                    continue 
                 for tool_require in tool_requires:  # Do the override
                     if str(tool_require) == str(node.ref):  # FIXME: Ugly str comparison
                         continue  # avoid self-loop of build-requires in build context

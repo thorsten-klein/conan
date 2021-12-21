@@ -222,7 +222,6 @@ class mylib(ConanFile):
         self.assertIn("mytool/0.1@test/testchannel: Already installed!", client.out)
         self.assertIn("conanfile.py (mylib/0.1): Coverage True", client.out)
 
-    @unittest.expectedFailure
     def test_multiple_tool_requires(self):
         client = TestClient()
         self._create(client)
@@ -238,14 +237,14 @@ class mylib(ConanFile):
         client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
         
         # TODO: right behavior that tool1, tool2 and tool3 are not built???
-        for profiles in ["-pr:b=testprofile.txt"]:
+        for profiles in ["-pr:b=testprofile.txt"]: # no effect since there is no build_require at the moment
             client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
-            self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
-            self.assertIn("tool1/0.1@test/testchannel: Created package", client.out) 
-            self.assertIn("tool2/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
-            self.assertIn("tool2/0.1@test/testchannel: Created package", client.out)
-            self.assertIn("tool3/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
-            self.assertIn("tool3/0.1@test/testchannel: Created package", client.out)
+            self.assertNotIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertNotIn("tool1/0.1@test/testchannel: Created package", client.out) 
+            self.assertNotIn("tool2/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertNotIn("tool2/0.1@test/testchannel: Created package", client.out)
+            self.assertNotIn("tool3/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
+            self.assertNotIn("tool3/0.1@test/testchannel: Created package", client.out)
             self.assertIn("consumer/0.1@test/testchannel: Created package", client.out)
 
 
@@ -264,8 +263,91 @@ class mylib(ConanFile):
             with six.assertRaisesRegex(self, Exception, "graph loop"):
                 client.run("create conanfile_consumer.py consumer/0.1@test/testchannel --build='*' -pr:b=default -pr:h=default {profiles}".format(profiles=profiles))
 
+     
+    def test_multiple_tool_requires_new1(self):
+        client = TestClient()
+        self._create(client)
+        profile3 = """
+[tool_requires]
+&+: tool1/0.1@test/testchannel
+&+: tool2/0.1@test/testchannel
+&+: tool3/0.1@test/testchannel
+nonexistingpattern*: sometool/1.2@user/channel
+"""
+        client.save({"conanfile_tool1.py": tool_conanfile_2,
+                     "conanfile_tool2.py": tool_conanfile_2,
+                     "conanfile_tool3.py": tool_conanfile_2,
+                     "conanfile_consumer.py": consumer_conanfile_2,
+                     "testprofile.txt": profile3}, clean_first=True)
+
+        client.run("export conanfile_tool1.py --name=tool1 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool2.py --name=tool2 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
         
-    @unittest.expectedFailure
+        for index, profiles in enumerate(["-pr:h=testprofile.txt",
+                                          "-pr:b=testprofile.txt -pr:h=testprofile.txt"]):
+            graphfile = "mygraph%s" % index
+            client.run("info conanfile_consumer.py --graph={graphfile} -pr:b=default -pr:h=default {profiles}".format(profiles=profiles, graphfile=graphfile))
+            contents = open(os.path.join(client.current_folder, graphfile)).read()
+            self.assertIn('conanfile_consumer.py" -> "tool1/0.1@test/testchannel"', contents)
+            self.assertIn('conanfile_consumer.py" -> "tool2/0.1@test/testchannel"', contents)
+            self.assertIn('conanfile_consumer.py" -> "tool3/0.1@test/testchannel"', contents)
+            
+    def test_multiple_tool_requires_new2(self):
+        client = TestClient()
+        self._create(client)
+        profile3 = """
+[tool_requires]
+&+: tool1/0.1@test/testchannel
+&+: tool2/0.1@test/testchannel
+*: tool3/0.1@test/testchannel
+nonexistingpattern*: sometool/1.2@user/channel
+"""
+        client.save({"conanfile_tool1.py": tool_conanfile_2,
+                     "conanfile_tool2.py": tool_conanfile_2,
+                     "conanfile_tool3.py": tool_conanfile_2,
+                     "conanfile_consumer.py": consumer_conanfile_2,
+                     "testprofile.txt": profile3}, clean_first=True)
+
+        client.run("export conanfile_tool1.py --name=tool1 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool2.py --name=tool2 --version=0.1 --user=test --channel=testchannel")
+        client.run("export conanfile_tool3.py --name=tool3 --version=0.1 --user=test --channel=testchannel")
+        
+        graphfile = "mygraph"
+
+        profiles="-pr:b=testprofile.txt"
+        client.run("info conanfile_consumer.py --graph={graphfile} -pr:b=default -pr:h=default {profiles}".format(profiles=profiles, graphfile=graphfile))
+        contents = open(os.path.join(client.current_folder, graphfile)).read()
+        self.assertNotIn('conanfile_consumer.py" -> "tool1/0.1@test/testchannel"', contents)
+        self.assertNotIn('conanfile_consumer.py" -> "tool2/0.1@test/testchannel"', contents)
+        self.assertNotIn('conanfile_consumer.py" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertNotIn('"tool1/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertNotIn('"tool2/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        
+        
+        profiles="-pr:h=testprofile.txt"
+        client.run("info conanfile_consumer.py --graph={graphfile} -pr:b=default -pr:h=default {profiles}".format(profiles=profiles, graphfile=graphfile))
+        contents = open(os.path.join(client.current_folder, graphfile)).read()
+        self.assertIn('conanfile_consumer.py" -> "tool1/0.1@test/testchannel"', contents)
+        self.assertIn('conanfile_consumer.py" -> "tool2/0.1@test/testchannel"', contents)
+        self.assertIn('conanfile_consumer.py" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertNotIn('"tool1/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertNotIn('"tool2/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        
+        
+        profiles="-pr:b=testprofile.txt -pr:h=testprofile.txt"
+        client.run("info conanfile_consumer.py --graph={graphfile} -pr:b=default -pr:h=default {profiles}".format(profiles=profiles, graphfile=graphfile))
+        contents = open(os.path.join(client.current_folder, graphfile)).read()
+        self.assertIn('conanfile_consumer.py" -> "tool1/0.1@test/testchannel"', contents)
+        self.assertIn('conanfile_consumer.py" -> "tool2/0.1@test/testchannel"', contents)
+        self.assertIn('conanfile_consumer.py" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertIn('"tool1/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        self.assertIn('"tool2/0.1@test/testchannel" -> "tool3/0.1@test/testchannel"', contents)
+        
+        
+        
+        
+            
     def test_forced_build(self):
         client = TestClient()
         self._create(client)
@@ -282,12 +364,12 @@ tool1/0.1@test/testchannel
         
         
         for build in ["--build=consumer --build=tool1",
-                      "--build=all",
+                      #"--build=all", # not supported anymore??
                       "--build='*'"
                      ]:
             for profiles in ["-pr:b=testprofile.txt -pr:h=testprofile.txt",
                              "-pr:h=testprofile.txt",
-                             "-pr:b=testprofile.txt"
+                             #"-pr:b=testprofile.txt" # no effect since there is no build_require at the moment
                             ]:
                 client.run("create conanfile_consumer.py consumer/0.1@test/testchannel -pr:b=default -pr:h=default {profiles} {build}".format(profiles=profiles, build=build))
                 self.assertIn("tool1/0.1@test/testchannel: Forced build from source", client.out) # build_requires from profile needs to  be built first
