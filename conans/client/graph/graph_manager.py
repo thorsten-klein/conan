@@ -414,7 +414,8 @@ class GraphManager(object):
                                      apply_build_requires=apply_build_requires)
 
         # Sort of closures, for linking order
-        inverse_levels = {n: i for i, level in enumerate(graph.inverse_levels()) for n in level}
+        inverse_levels = {n: (i, n.conanfile.priority) for i, level in enumerate(graph.inverse_levels()) for n in level}
+                
         for node in graph.nodes:
             node.public_closure.pop(node.name, context=node.context)
             # List sort is stable, will keep the original order of closure, but prioritize levels
