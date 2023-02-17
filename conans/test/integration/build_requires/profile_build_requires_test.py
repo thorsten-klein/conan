@@ -76,6 +76,7 @@ class MyLib(ConanFile):
     name = "MyLibOverridingMytool"
     version = "0.1"
     build_requires = "mytool/0.1@lasote/stable"
+    override_profiles = True
     
     def build(self):
         self.run("mytool")

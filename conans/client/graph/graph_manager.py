@@ -376,9 +376,9 @@ class GraphManager(object):
                                              nodes_subset=nodessub, root=node)
 
             # add build_requires from profiles first
-            if new_profile_build_requires: 
+            if new_profile_build_requires and node.conanfile.override_profiles: 
                 _recurse_build_requires(new_profile_build_requires, {})
-
+            
             if package_build_requires:
                 if default_context == CONTEXT_BUILD:
                     br_build, br_host = [], []
@@ -394,6 +394,9 @@ class GraphManager(object):
                 else:
                     br_all = [(it, ctxt) for (_, ctxt), it in package_build_requires.items()]
                     _recurse_build_requires(br_all, profile_build_requires)
+
+            if new_profile_build_requires and not node.conanfile.override_profiles:
+                _recurse_build_requires(new_profile_build_requires, {})
 
             if graph_lock and node.recipe != RECIPE_VIRTUAL:
                 graph_lock.check_locked_build_requires(node, package_build_requires,
