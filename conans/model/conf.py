@@ -61,6 +61,7 @@ BUILT_IN_CONFS = {
     "tools.cmake.cmaketoolchain:toolset_arch": "Will add the ',host=xxx' specifier in the 'CMAKE_GENERATOR_TOOLSET' variable of 'conan_toolchain.cmake' file",
     "tools.gnu:pkg_config": "Define the 'pkg_config' executable name or full path",
     "tools.env.virtualenv:powershell": "Opt-in to generate Powershell '.ps1' scripts instead of '.bat'",
+    "tools.env.virtualenv:prefer_sysroot": "Opt-in to prefer dependencies with an cpp_info.sysroot value (most downstream in graph)",
     "tools.meson.mesontoolchain:backend": "Set the Meson backend. Possible values: 'ninja', 'vs', 'vs2010', 'vs2015', 'vs2017', 'vs2019', 'xcode'",
     "tools.meson.mesontoolchain:extra_machine_files": "List of paths for any additional native/cross file references to be appended to the existing Conan ones",
     "tools.files.download:download_cache": "Location for the download cache",

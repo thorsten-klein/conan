@@ -16,6 +16,9 @@ class Tool(ConanFile):
     exports_sources = "*_tool*"
     def package(self):
         copy(self, "*tool*", ".", os.path.join(self.package_folder, "bin"))
+    def package_info(self):
+        self.buildenv_info.append_path("PATH", os.path.join(self.package_folder, "bin"))
+        self.cpp_info.sysroot = self.package_folder
 """
 
 tool_conanfile = """
@@ -203,7 +206,7 @@ build2/0.1@user/testing
             def package(self):
                 copy(self, "*tool*", ".", os.path.join(self.package_folder, "bin"))
             def package_info(self):
-                self.buildenv_info.append_path("PATH", os.path.join(self.package_folder, "bin"))
+                self.buildenv_info.prepend_path("PATH", os.path.join(self.package_folder, "bin"))
         """)
 
         for name in ["cmake_tool","ninja_tool","cppcheck_tool","make_tool"]:
@@ -232,6 +235,9 @@ build2/0.1@user/testing
         profile_sysroot = textwrap.dedent("""
         [build_requires]
         sysroot/0.1@lasote/stable
+
+        [conf]
+        tools.env.virtualenv:prefer_sysroot=true
         """)
 
         lib_conanfile_build_requires_mytool = textwrap.dedent("""

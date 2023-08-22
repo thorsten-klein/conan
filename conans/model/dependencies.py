@@ -3,7 +3,6 @@ from collections import OrderedDict
 from conans.model.conanfile_interface import ConanFileInterface
 from conans.model.ref import ConanFileReference
 
-
 class Requirement(object):
 
     def __init__(self, ref, build=False, direct=True, test=False, visible=True):
@@ -32,7 +31,6 @@ class Requirement(object):
         """
         assert self.build == other.build
         self.visible |= other.visible
-
 
 class UserRequirementsDict(object):
     """ user facing dict to allow access of dependencies by name
@@ -84,7 +82,6 @@ class UserRequirementsDict(object):
 
     def values(self):
         return self._data.values()
-
 
 class ConanFileDependencies(UserRequirementsDict):
 
@@ -168,9 +165,21 @@ class ConanFileDependencies(UserRequirementsDict):
                 if deps_in_opened:
                     new_opened[req] = conanfile  # keep it for next iteration
                 else:
-                    result[req] = conanfile  # No dependencies in open set!
+                    # No dependencies in open set!
+                    prefer_sysroot = conanfile._conanfile.conf.get("tools.env.virtualenv:prefer_sysroot",
+                                                 check_type=bool)
+                    if conanfile.cpp_info.sysroot and prefer_sysroot:
+                        # prepend sysroot in result
+                        sysroot = OrderedDict({req:conanfile})
+                        sysroot.update(result)
+                        result = sysroot
+                    else:
+                        result[req] = conanfile  # No dependencies in open set!
 
             opened = new_opened
+
+        for req, conanfile in result.items():
+            print("Info: %s" % conanfile.ref.name)
         return ConanFileDependencies(result)
 
     @property
