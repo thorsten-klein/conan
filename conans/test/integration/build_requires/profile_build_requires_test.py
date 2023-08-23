@@ -201,7 +201,7 @@ build2/0.1@user/testing
         from conan.tools.files import copy
         class Tool(ConanFile):
             name = "{name}"
-            version = "0.1"
+            version = "{version}"
             exports_sources = "*tool*"
             def package(self):
                 copy(self, "*tool*", ".", os.path.join(self.package_folder, "bin"))
@@ -210,11 +210,12 @@ build2/0.1@user/testing
         """)
 
         for name in ["cmake_tool","ninja_tool","cppcheck_tool","make_tool"]:
-            name_bin = (name + ".bat") if platform.system() == "Windows" else name
-            client.save({CONANFILE: cppcheck_toolonanfile_template.format(name=name)}, clean_first=True)
-            client.save({name_bin: "echo overridden %s!" % name})
-            os.chmod(os.path.join(client.current_folder, name_bin), 0o777)
-            client.run("export . lasote/stable")
+            for version in ["0.1", "0.2"]:
+                name_bin = (name + ".bat") if platform.system() == "Windows" else name
+                client.save({CONANFILE: cppcheck_toolonanfile_template.format(name=name, version=version)}, clean_first=True)
+                client.save({name_bin: "echo overridden %s! version %s" % (name, version)})
+                os.chmod(os.path.join(client.current_folder, name_bin), 0o777)
+                client.run("export . lasote/stable")
 
         profile_cmake_tool = textwrap.dedent("""
         [build_requires]
@@ -249,9 +250,9 @@ build2/0.1@user/testing
             generators = "VirtualBuildEnv"
 
             def build_requirements(self):
-                self.tool_requires("cmake_tool/0.1@lasote/stable")
-                self.tool_requires("make_tool/0.1@lasote/stable")
-                self.tool_requires("ninja_tool/0.1@lasote/stable")
+                self.tool_requires("cmake_tool/0.2@lasote/stable")
+                self.tool_requires("make_tool/0.2@lasote/stable")
+                self.tool_requires("ninja_tool/0.2@lasote/stable")
 
             def build(self):
                 self.run("cmake_tool")
@@ -272,15 +273,106 @@ build2/0.1@user/testing
 
         client.run("install myproject/0.1@lasote/stable --build=missing \
                         -pr:h=./profile_sysroot.txt \
-                        -pr:h=./profile_cmake_tool.txt \
                         -pr:h=./profile_ninja_tool.txt \
                         -pr:h=./profile_cppcheck_tool.txt \
                         -pr:h=./profile_make_tool.txt \
         ")
-        self.assertIn("overridden cmake_tool!", client.out)
-        self.assertIn("overridden ninja_tool!", client.out)
-        self.assertIn("overridden cppcheck_tool!", client.out)
-        self.assertIn("overridden make_tool!", client.out)
+        self.assertIn("overridden cmake_tool! version 0.2", client.out)
+        self.assertIn("overridden ninja_tool! version 0.1", client.out)
+        self.assertIn("overridden cppcheck_tool! version 0.1", client.out)
+        self.assertIn("overridden make_tool! version 0.1", client.out)
+
+    def test_build_requires_override_profile(self):
+        client = TestClient()
+        self._create(client)
+
+        cppcheck_toolonanfile_template = textwrap.dedent("""
+        import os
+        from conan import ConanFile
+        from conan.tools.files import copy
+        class Tool(ConanFile):
+            name = "{name}"
+            version = "{version}"
+            exports_sources = "*tool*"
+            def package(self):
+                copy(self, "*tool*", ".", os.path.join(self.package_folder, "bin"))
+            def package_info(self):
+                self.buildenv_info.prepend_path("PATH", os.path.join(self.package_folder, "bin"))
+        """)
+
+        for name in ["cmake_tool","ninja_tool","cppcheck_tool","make_tool"]:
+            for version in ["0.1", "0.2"]:
+                name_bin = (name + ".bat") if platform.system() == "Windows" else name
+                client.save({CONANFILE: cppcheck_toolonanfile_template.format(name=name, version=version)}, clean_first=True)
+                client.save({name_bin: "echo overridden %s! version %s" % (name, version)})
+                os.chmod(os.path.join(client.current_folder, name_bin), 0o777)
+                client.run("export . lasote/stable")
+
+        profile_cmake_tool = textwrap.dedent("""
+        [build_requires]
+        cmake_tool/0.1@lasote/stable
+        """)
+        profile_ninja_tool = textwrap.dedent("""
+        [build_requires]
+        ninja_tool/0.1@lasote/stable
+        """)
+        profile_cppcheck_tool = textwrap.dedent("""
+        [build_requires]
+        cppcheck_tool/0.1@lasote/stable
+        """)
+        profile_make_tool = textwrap.dedent("""
+        [build_requires]
+        make_tool/0.1@lasote/stable
+        """)
+        profile_sysroot = textwrap.dedent("""
+        [build_requires]
+        sysroot/0.1@lasote/stable
+
+        [conf]
+        user.graph:reverse_order=true
+        """)
+
+        lib_conanfile_build_requires_mytool = textwrap.dedent("""
+        import os
+        from conan import ConanFile
+        class MyLib(ConanFile):
+            name = "myproject"
+            version = "0.1"
+            generators = "VirtualBuildEnv"
+
+            def build_requirements(self):
+                self.tool_requires("cmake_tool/0.2@lasote/stable")
+                self.tool_requires("make_tool/0.2@lasote/stable")
+                self.tool_requires("ninja_tool/0.2@lasote/stable")
+
+            def build(self):
+                self.run("cmake_tool")
+                self.run("ninja_tool")
+                self.run("cppcheck_tool")
+                self.run("make_tool")
+
+        """.format(locate="where" if platform.system()== "Windows" else "which"))
+
+        client.save({CONANFILE: lib_conanfile_build_requires_mytool,
+                     "profile_cmake_tool.txt": profile_cmake_tool,
+                     "profile_ninja_tool.txt": profile_ninja_tool,
+                     "profile_cppcheck_tool.txt": profile_cppcheck_tool,
+                     "profile_make_tool.txt": profile_make_tool,
+                     "profile_sysroot.txt": profile_sysroot,
+                     }, clean_first=True)
+        client.run("export . lasote/stable")
+
+        client.run("install myproject/0.1@lasote/stable --build=missing \
+                        -pr:h=./profile_cppcheck_tool.txt \
+                        -pr:h=./profile_sysroot.txt \
+                        -pr:h=./profile_ninja_tool.txt \
+                        -pr:h=./profile_make_tool.txt \
+        ")
+        print(client.out)
+        self.assertIn("overridden cmake_tool! version 0.2", client.out)
+        self.assertIn("overridden ninja_tool! version 0.1", client.out)
+        self.assertIn("overridden cppcheck_tool! version 0.1", client.out)
+        self.assertIn("overridden make_tool! version 0.1", client.out)
 
     def test_profile_open_requires(self):
         client = TestClient()
