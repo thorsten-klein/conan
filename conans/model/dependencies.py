@@ -176,11 +176,23 @@ class ConanFileDependencies(UserRequirementsDict):
                     else:
                         result[req] = conanfile  # No dependencies in open set!
 
+                    # v2
+                    # priority = getattr(conanfile._conanfile, "priority", 0)
+                    # if not priority in result:
+                    #     result[priority] = OrderedDict()
+                    # result[priority][req] = conanfile
+
             opened = new_opened
 
         for req, conanfile in result.items():
             print("Info: %s" % conanfile.ref.name)
         return ConanFileDependencies(result)
+
+        # v2
+        # prioritized = OrderedDict()
+        # for _, deps in sorted(result.items()):
+        #     prioritized.update(deps)
+        # return ConanFileDependencies(prioritized)
 
     @property
     def direct_host(self):

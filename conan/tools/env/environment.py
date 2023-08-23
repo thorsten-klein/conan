@@ -139,12 +139,15 @@ class _EnvValue:
         values = []
         for v in self._values:
             if v is _EnvVarPlaceHolder:
+                #continue
                 if placeholder:
                     values.append(placeholder.format(name=self._name))
             else:
                 if self._path:
                     v = subsystem_path(subsystem, v)
                 values.append(v)
+        # if _EnvVarPlaceHolder in self._values:
+        #     values.append(placeholder.format(name=self._name))
         if self._path:
             return pathsep.join(values)
 
