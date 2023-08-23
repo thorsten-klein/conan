@@ -39,8 +39,13 @@ class VirtualBuildEnv:
         profile_env = self._conanfile.buildenv
         build_env.compose_env(profile_env)
 
-        build_requires = self._conanfile.dependencies.build.topological_sort
-        for require, build_require in reversed(build_requires.items()):
+        reverse_order = self._conanfile.conf.get("tools.env.virtualenv:reverse_order", check_type=bool)
+        if reverse_order:
+            order = self._conanfile.dependencies.build.topological_sort_reverse
+        else:
+            order = self._conanfile.dependencies.build.topological_sort
+
+        for require, build_require in reversed(order.items()):
             if require.direct:  # Only buildenv_info from direct deps is propagated
                 # higher priority, explicit buildenv_info
                 if build_require.buildenv_info:

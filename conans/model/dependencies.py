@@ -155,6 +155,12 @@ class ConanFileDependencies(UserRequirementsDict):
         return ConanFileDependencies(data, require_filter)
 
     @property
+    def topological_sort_reverse(self):
+        result = self.topological_sort
+        result._data = OrderedDict(reversed(list(result._data.items())))
+        return result
+
+    @property
     def topological_sort(self):
         # Return first independent nodes, final ones are the more direct deps
         result = OrderedDict()
