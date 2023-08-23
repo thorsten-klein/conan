@@ -37,7 +37,7 @@ def print_graph(deps_graph, out):
 
     out.writeln("Requirements", Color.BRIGHT_YELLOW)
 
-    def _recipes(nodes):
+    def _recipes(nodes, revision=False):
         for _, list_nodes in nodes.items():
             node = list_nodes[0]  # For printing recipes, we can use the first one
             if node.recipe == RECIPE_EDITABLE:
@@ -45,8 +45,11 @@ def print_graph(deps_graph, out):
             else:
                 from_text = ("from local cache" if not node.remote
                              else "from '%s'" % node.remote.name)
-            out.writeln("    %s %s - %s" % (str(node.ref), from_text, node.recipe),
+            out.writeln("    %s %s - %s" % (repr(node.ref) if revision else str(node.ref), from_text, node.recipe),
                         Color.BRIGHT_CYAN)
+        if nodes and not revision:
+            out.writeln("with #RREV:", Color.YELLOW)
+            _recipes(nodes, True)
 
     _recipes(requires)
     if python_requires:
@@ -55,7 +58,7 @@ def print_graph(deps_graph, out):
             out.writeln("    %s" % repr(p.copy_clear_rev()), Color.BRIGHT_CYAN)
     out.writeln("Packages", Color.BRIGHT_YELLOW)
 
-    def _packages(nodes):
+    def _packages(nodes, revision=False):
         for package_id, list_nodes in nodes.items():
             # The only way to have more than 1 states is to have 2
             # and one is BINARY_SKIP (privates)
@@ -64,7 +67,10 @@ def print_graph(deps_graph, out):
                 binary.remove(BINARY_SKIP)
             assert len(binary) == 1
             binary = binary.pop()
-            out.writeln("    %s - %s" % (str(package_id), binary), Color.BRIGHT_CYAN)
+            out.writeln("    %s - %s" % (repr(package_id) if revision else str(package_id), binary), Color.BRIGHT_CYAN)
+        if nodes and not revision:
+            out.writeln("with #RREV:", Color.YELLOW)
+            _packages(nodes, True)
     _packages(requires)
 
     if build_requires:

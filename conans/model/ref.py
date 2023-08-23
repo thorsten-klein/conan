@@ -240,8 +240,7 @@ class ConanFileReference(namedtuple("ConanFileReference", "name version user cha
 
     def __repr__(self):
         str_rev = "#%s" % self.revision if self.revision else ""
-        user_channel = "@%s/%s" % (self.user, self.channel) if self.user or self.channel else ""
-        return "%s/%s%s%s" % (self.name, self.version, user_channel, str_rev)
+        return str(self) + str_rev
 
     def full_str(self):
         str_rev = "#%s" % self.revision if self.revision else ""
