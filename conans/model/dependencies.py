@@ -168,7 +168,16 @@ class ConanFileDependencies(UserRequirementsDict):
                 if deps_in_opened:
                     new_opened[req] = conanfile  # keep it for next iteration
                 else:
-                    result[req] = conanfile  # No dependencies in open set!
+                    # No dependencies in open set!
+                    prefer_sysroot = conanfile._conanfile.conf.get("tools.env.virtualenv:prefer_sysroot",
+                                                 check_type=bool)
+                    if prefer_sysroot and conanfile.cpp_info.sysroot:
+                        # prepend sysroot in result
+                        sysroot = OrderedDict({req:conanfile})
+                        sysroot.update(result)
+                        result = sysroot
+                    else:
+                        result[req] = conanfile  # No dependencies in open set!
 
             opened = new_opened
         return ConanFileDependencies(result)
