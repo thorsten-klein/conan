@@ -1,18 +1,12 @@
-import json
 import os
-import platform
 import textwrap
 
 import pytest
-from mock import mock
 
-from conan.tools.cmake.presets import load_cmake_presets
-from conans.test.assets.genconanfile import GenConanfile
 from conans.test.utils.tools import TestClient
-from conans.util.files import rmdir
 
 @pytest.mark.parametrize(
-    "find_package_prefer_config", ["ON", "OFF", ""],
+    "find_package_prefer_config", ["ON", "OFF", "", None],
 )
 @pytest.mark.parametrize(
     "config_name_consumer", ["Findhello.cmake", "hello-config.cmake"]
@@ -62,7 +56,8 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
 
             def generate(self):
                 tc = CMakeToolchain(self)
-                tc.blocks["find_paths"].values["find_package_prefer_config"] = "{value}"
+                if "{value}" in ["ON","OFF",""]:
+                    tc.blocks["find_paths"].values["find_package_prefer_config"] = "{value}"
                 tc.generate()
 
             def build(self):
@@ -132,4 +127,8 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
 
     expected_filename = config_name_hello if (expected_component == "hello") else config_name_consumer
     assert "hello from {}:{}".format(expected_component, expected_filename) in client.out
-    assert "CMAKE_FIND_PACKAGE_PREFER_CONFIG '%s'" % find_package_prefer_config
+    
+    if find_package_prefer_config in ["ON", "OFF"]:
+        assert "CMAKE_FIND_PACKAGE_PREFER_CONFIG '%s'" % find_package_prefer_config
+    else:
+        assert "CMAKE_FIND_PACKAGE_PREFER_CONFIG ''"
