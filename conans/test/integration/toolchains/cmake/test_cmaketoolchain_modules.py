@@ -21,22 +21,20 @@ from conans.util.files import rmdir
     "config_name_hello", ["Findhello.cmake", "hello-config.cmake"]
 )
 @pytest.mark.parametrize(
-    "cmake_consumer_path_mode", ["PREPEND", "APPEND"]
+    "cmake_path_mode", ["PREPEND", "APPEND", None]
 )
 @pytest.mark.parametrize(
-    "cmake_subfolder", ["cmake", "anyothername", "lib/cmake", "lib", "hello", "hello/cmake"]
+    "cmake_subfolder", ["cmake",
+                        "anyothername",
+                        os.path.join("lib", "cmake"),
+                        "lib",
+                        "hello",
+                        os.path.join("hello", "cmake")
+                        ]
 )
-#def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello="hello-config.cmake", config_name_consumer="Findhello.cmake", find_package_prefer_config="ON"):
-def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello, config_name_consumer, find_package_prefer_config, cmake_consumer_path_mode,cmake_subfolder):
-    # print("\n\n\n")
-    # print("config_name_hello: %s" % config_name_hello)
-    # print("config_name_consumer: %s" % config_name_consumer)
-    # print("find_package_prefer_config: %s" % find_package_prefer_config)
-
+def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello, config_name_consumer, find_package_prefer_config, cmake_path_mode,cmake_subfolder):
     client = TestClient(path_with_spaces=False)
-
     find_hello = textwrap.dedent("""
-        SET(hello_FOUND 1)
         MESSAGE(STATUS "hello from {component}:{filename}")
         """)
     conanfile_hello = textwrap.dedent("""
@@ -72,14 +70,25 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
                 cmake.configure()
                 cmake.install()
         """.format(value=find_package_prefer_config))
+
+    if cmake_path_mode in ["APPEND","PREPEND"]:
+        list_cmd = textwrap.dedent("""
+            list({mode} CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/mymodules)
+            list({mode} CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/mymodules)
+            """.replace("{mode}", str(cmake_path_mode)))
+    else:
+        list_cmd = ""
+
     cmake_consumer = textwrap.dedent("""\
         cmake_minimum_required(VERSION 3.15)
         project(MyHello CXX)
-        list(%s CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/mymodules)
-        list(%s CMAKE_PREFIX_PATH ${CMAKE_CURRENT_SOURCE_DIR}/mymodules)
+        %s
         message(STATUS "CMAKE_FIND_PACKAGE_PREFER_CONFIG '${CMAKE_FIND_PACKAGE_PREFER_CONFIG}'")
+        message(STATUS "CMAKE_MODULE_PATH '${CMAKE_MODULE_PATH}'")
+        message(STATUS "CMAKE_PREFIX_PATH '${CMAKE_PREFIX_PATH}'")
+        set(CMAKE_FIND_DEBUG_MODE TRUE)
         find_package(hello REQUIRED)
-        """ % (cmake_consumer_path_mode, cmake_consumer_path_mode))
+        """ % list_cmd)
 
     client.save({"hello/conanfile.py": conanfile_hello,
                  "hello/%s/%s" % (cmake_subfolder, config_name_hello): find_hello.format(component="hello", filename=config_name_hello),
@@ -89,17 +98,12 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
                  })
 
     client.run("export hello")
-    with client.chdir("consumer"):
-        client.run("install . -pr:h=default --build=missing")
-        with client.chdir("build"):
-            client.run_command("cat ../conan_toolchain.cmake")
-            #print(client.out)
-            client.run_command("cmake .. -DCMAKE_TOOLCHAIN_FILE=../conan_toolchain.cmake")
-            #print(client.out)
+    client.run("create consumer --build=missing")
+
     filenames = (config_name_hello, config_name_consumer)
-    if cmake_consumer_path_mode == "PREPEND":
+    if cmake_path_mode == "PREPEND":
         if config_name_hello == config_name_consumer:
-            expected_component = "consumer" # path was prepended
+            expected_component = "consumer" # consumer path was prepended
         if find_package_prefer_config == "ON":
             if filenames == ("hello-config.cmake", "Findhello.cmake"):
                 expected_component = "hello"
@@ -110,9 +114,9 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
                 expected_component = "consumer"
             elif filenames == ("Findhello.cmake", "hello-config.cmake"):
                 expected_component = "hello"
-    elif cmake_consumer_path_mode == "APPEND":
+    elif cmake_path_mode == "APPEND":
         if config_name_hello == config_name_consumer:
-            expected_component = "hello" # path was appended
+            expected_component = "hello" # consumer path was appended
         if find_package_prefer_config == "ON":
             if filenames == ("hello-config.cmake", "Findhello.cmake"):
                 expected_component = "hello"
@@ -123,6 +127,9 @@ def test_cmaketoolchain_path_find_package_real_config_default(config_name_hello,
                 expected_component = "consumer"
             elif filenames == ("Findhello.cmake", "hello-config.cmake"):
                 expected_component = "hello"
+    elif cmake_path_mode == None:
+        expected_component = "hello" # nothing from consumer is found
+
     expected_filename = config_name_hello if (expected_component == "hello") else config_name_consumer
-    assert "hello from {component}:{filename}".format(component=expected_component, filename=expected_filename) in client.out
-    assert "CMAKE_FIND_PACKAGE_PREFER_CONFIG '%s'" % find_package_prefer_config in client.out
+    assert "hello from {}:{}".format(expected_component, expected_filename) in client.out
+    assert "CMAKE_FIND_PACKAGE_PREFER_CONFIG '%s'" % find_package_prefer_config
